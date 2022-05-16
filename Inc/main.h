@@ -99,72 +99,164 @@
 
 
 
-int32_t map (int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max);
-void autodetect();
 void runPIcontrol();
 
-extern uint16_t switchtime[3];
-extern uint32_t ui32_tim1_counter;
-extern uint32_t uint32_PAS_counter;
+
+void UART_IdleItCallback(void);
+
+extern volatile uint16_t switchtime[3];
+
+extern const q31_t DEG_0;
+extern const q31_t DEG_plus60;
+extern const q31_t DEG_plus120;
+extern const q31_t DEG_plus180;
+extern const q31_t DEG_minus60;
+extern const q31_t DEG_minus120;
+extern const q31_t Q31_DEGREE;
+extern const int32_t MAX_INT32;
+extern const int32_t MIN_INT32;
+
+
+typedef enum {HALL_STATE_SIXSTEP = 0, HALL_STATE_EXTRAPOLATION = 1, HALL_STATE_PLL = 2} hall_angle_state_t;
+
+typedef enum {MOTOR_STATE_NORMAL = 0, 
+                MOTOR_STATE_BLOCKED = 1, 
+                MOTOR_STATE_PLL_ERROR = 2, 
+                MOTOR_STATE_HALL_ERROR = 3, 
+                MOTOR_STATE_CHIP_OVER_TEMPERATURE = 4,
+                MOTOR_STATE_BATTERY_UNDERVOLTAGE = 5,
+                MOTOR_STATE_OVER_SPEED = 6,
+                MOTOR_STATE_DBG_ERROR = 10,
+                } motor_error_state_t;
+
+typedef enum {VOLTAGE_STATE_NORMAL = 0, VOLTAGE_STATE_CRITICAL = 1, VOLTAGE_STATE_UNDER_VOLTAGE_ERROR = 2} voltage_state_t;
+
+typedef enum {TEMP_STATE_NOMRAL = 0, TEMP_STATE_CRITICAL = 1, TEMP_STATE_OVER_TEMP_ERROR = 2} temperature_state_t;
+
+typedef struct
+{
+    int32_t         i32_battery_voltage_Vx10;
+    int32_t         i32_battery_voltage_uncorrected_Vx10;
+    voltage_state_t enum_voltage_state;
+    int32_t         i32_battery_current_mA;
+    int32_t         i32_battery_power_W_x10;
+    uint8_t         ui8_remaining_distance_km;
+    uint16_t        ui16_remaining_time_min;
+} BatteryData_t;
+
+typedef struct
+{
+    q31_t           q31_temperature_adc_cumulated;
+    uint8_t         ui8_shift;
+    q31_t           q31_temperature_degrees;
+    temperature_state_t enum_temperature_state;
+} TemperatureData_t;
+
+typedef struct
+{
+    TemperatureData_t ChipTemperatureData;
+    TemperatureData_t MotorTemperatureData;
+    BatteryData_t     BatteryData;
+} ADC_Data_t;
+
+typedef struct 
+{
+    // PAS data (pedal speed)
+    // input
+    volatile uint8_t ui8_PAS_flag;                  // indicate pas event : HAL_GPIO_EXTI_Callback
+    volatile uint32_t uint32_PAS_counter;           // 8kHz counter (tim3) : HAL_TIM_PeriodElapsedCallback
+    // output
+    uint32_t       uint32_PAS;                      // tics between two pas sensor events (smoothed/filtered version of uint32_PAS_counter) -> todo: can be static in pas module
+    uint32_t       uint32_PAS_omega_x10;            // angular frequency in rad/s x 10
+    uint32_t       uint32_PAS_rpm;
+    uint8_t        uint8_pedaling;                  // 1 if pedaling, 0 else
+
+    // torque sensor data
+    uint16_t       uint16_torque_adc_offset;
+    // input
+    volatile uint16_t       uint16_torque_adc;      // raw adc data (was ui16_reg_adc_value) : HAL_ADC_ConvCpltCallback
+    // output
+    uint32_t       uint32_torque_Nm_x10;            // torque value in Nm x 10
+} PedalData_t;
+
+typedef struct
+{
+    // state and flags
+    hall_angle_state_t enum_hall_angle_state;       // state of the rotor angle estimation state machine
+    uint8_t hall_angle_detect_flag;                 // autodetect
+
+    // hall module input
+    volatile uint8_t ui8_hall_timeout_flag;         // HAL_TIM_PeriodElapsedCallback
+    volatile uint16_t ui16_timertics;               // timertics between two hall events
+    volatile uint32_t uint32_tics_filtered;         // filtered version of ui16_timertics
+
+    // hall module output
+    q31_t q31_rotorposition_absolute;
+    q31_t q31_rotorposition_hall;
+    int32_t i32_omega_el;
+
+} HallData_t;
+
+
+typedef struct
+{   
+    uint32_t        uint32_SPEED_kmh_x10;
+    uint16_t        ui16_wheel_time_ms;
+} WheelSpeedData_t;
+
+
 
 typedef struct
 {
 
-	q31_t       	Voltage;
-	uint32_t       	Speed;
-	q31_t          	i_d;
-	q31_t          	i_q;
+    uint8_t         ui8_lights;
+    uint8_t         ui8_walk_assist;
+    int32_t         i32_i_d_mA;
+    int32_t         i32_i_q_mA;
 	q31_t          	u_d;
 	q31_t          	u_q;
-	q31_t          	u_abs;
-	q31_t          	Battery_Current;
-	uint8_t 		hall_angle_detect_flag;
-	uint8_t 		char_dyn_adc_state;
-	uint8_t 		assist_level;
-	uint8_t 		regen_level;
-	int8_t         	Temperature;
-	int8_t         	system_state;
-	int8_t         	gear_state;
-	int8_t         	error_state;
+	int32_t         i32_U_magnitude;
+    int32_t         i32_U_angle;
+	int8_t 		    i8_assist_level;
+    //
+    int32_t         i32_power_Wx10_for_display;
+
+    //
+    uint8_t         ui8_dbg_log_value;
+    uint16_t        ui16_dbg_value;
+    uint16_t        ui16_dbg_value2;
+    uint8_t         ui8_go;
+    uint8_t         ui8_log;
+
+    PedalData_t PedalData;
+    WheelSpeedData_t WheelSpeedData;
+    HallData_t HallData;
+    ADC_Data_t ADC_Data;
+
 
 }MotorState_t;
 
-typedef struct
-{
-
-	uint16_t       	wheel_cirumference;
-	uint16_t       	p_Iq;
-	uint16_t       	i_Iq;
-	uint16_t       	p_Id;
-	uint16_t       	i_Id;
-	uint16_t       	TS_coeff;
-	uint16_t       	PAS_timeout;
-	uint16_t       	ramp_end;
-	uint16_t       	throttle_offset;
-	uint16_t       	throttle_max;
-	uint16_t       	gear_ratio;
-	uint8_t       	speedLimit;
-	uint8_t       	pulses_per_revolution;
-	uint16_t       	phase_current_max;
-	int16_t       	spec_angle;
-
-
-}MotorParams_t;
 
 typedef struct
 {
-	int16_t       	gain_p;
-	int16_t       	gain_i;
-	int16_t       	limit_i;
-	int16_t       	limit_output;
-	int16_t       	recent_value;
+	int32_t       	gain_p;
+	int32_t       	gain_i;
+	int32_t       	limit_output_min_shifted;
+    int32_t         limit_integral_min_shifted;
+	int32_t       	limit_output_max_shifted;
+    int32_t         limit_integral_max_shifted;
+	int32_t       	recent_value;
 	int32_t       	setpoint;
 	int32_t       	integral_part;
-	int16_t       	max_step;
-	int32_t       	out;
-	int8_t       	shift;
+	int32_t       	max_step_shifted;
+	int32_t       	out_shifted;
+	uint8_t       	shift;
+    int8_t          id;
 
 }PI_control_t;
+
+void disable_pwm(void);
+void trigger_motor_error(motor_error_state_t err);
 
 /* USER CODE END Private defines */
 

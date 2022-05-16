@@ -14,7 +14,12 @@ main.hex
 *.sym
 
 Debug
+build
 /JavaConfigurator/nbproject/private/
 /JavaConfigurator/build/
 /JavaConfigurator/dist/
 /Release/
+
+.cortex-debug*
+
+.vscode/settings.json
