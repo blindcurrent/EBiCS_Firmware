@@ -183,13 +183,24 @@ void Display_Service(MotorState_t *pMS)
         }
 
         ui16_temp = (uint16_t) pMS->ADC_Data.BatteryData.i32_battery_voltage_Vx10;
-        if(ui16_temp < ui16_voltage_state_down_transition[ui8_voltage_state])
+        if(pMS->ADC_Data.BatteryData.enum_voltage_state == VOLTAGE_STATE_NORMAL)
         {
-            --ui8_voltage_state;
+            if(ui16_temp < ui16_voltage_state_down_transition[ui8_voltage_state])
+            {
+                --ui8_voltage_state;
+            }
+            else if(ui16_temp > ui16_voltage_state_up_transition[ui8_voltage_state])
+            {
+                ++ui8_voltage_state;
+            }
         }
-        else if(ui16_temp > ui16_voltage_state_up_transition[ui8_voltage_state])
+        else if(pMS->ADC_Data.BatteryData.enum_voltage_state == VOLTAGE_STATE_CRITICAL)
         {
-            ++ui8_voltage_state;
+            ui8_voltage_state = 1;
+        }
+        else
+        {
+            ui8_voltage_state = 0;
         }
         TxBuff[8] = (ui8_voltage_state << 4) + ui8_temperature_state;
 

@@ -108,12 +108,12 @@ void debug_comm(MotorState_t *pMS)
             // -------------------------------------- motor control
             if(ui8_e_print_log_info_flag && ui8_g_UART_TxCplt_flag)
             {
-                debug_printf("[ctrl state] Umag Uangle\n");
+                debug_printf("[ctrl state] Umag Uangle (speed kmhx10)\n");
                 ui8_e_print_log_info_flag = 0;
             }
             else
             {
-                print_motor_control_info();
+                print_motor_control_info(pMS);
             }
             break;
         case 2:

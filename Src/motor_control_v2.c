@@ -11,6 +11,7 @@ typedef enum
 {
     IDLE = 0,
     MTPA = 1,
+    LAC_FW = 2,
     RAMP_DOWN = 3
 } motor_control_state_t;
 
@@ -26,6 +27,7 @@ static PI_control_t PIangle;
 static int32_t i32_U_magnitude, i32_U_angle;
 static int32_t i32_u_d_temp, i32_u_q_temp;
 static motor_control_state_t CONTROL_STATE = IDLE;
+static uint8_t ui8_control_state_switch_count = 0;
 
 
 // motor_control_v2_utils
@@ -37,10 +39,10 @@ static void control_loop(int32_t i32_i_d_mA, int32_t i32_i_q_mA, int32_t i32_i_q
 static int32_t PI_control_v2(PI_control_t *PI_c);
 static void compute_dynamic_switchtime_v2(MotorState_t *pMS);
 
-void print_motor_control_info()
+void print_motor_control_info(MotorState_t *pMS)
 {
 #if (DISPLAY_TYPE == DISPLAY_TYPE_DEBUG)
-    debug_printf("[%d] %6d %6d\n", CONTROL_STATE, i32_U_magnitude, q31_degree_to_degree(i32_U_angle));
+    debug_printf("[%d %d] %6d %6d (%6d)\n", CONTROL_STATE, ui8_control_state_switch_count, i32_U_magnitude, q31_degree_to_degree(i32_U_angle), pMS->WheelSpeedData.uint32_SPEED_kmh_x10);
     //debug_printf("ctrl state: %d\nint: %d\nset: %d\nval: %d\n\n", CONTROL_STATE, PIangle.integral_part, PIangle.setpoint, PIangle.recent_value);
     //debug_printf("ctrl state: %d\nu_d: %d\nu_q: %d\nmag: %d\n\n", CONTROL_STATE, i32_u_d_temp, i32_u_q_temp, i32_U_magnitude);
 #endif
@@ -240,7 +242,7 @@ static void control_loop(int32_t i32_i_d_mA, int32_t i32_i_q_mA, int32_t i32_i_q
         CONTROL_STATE = IDLE;
     }
     
-    if( (CONTROL_STATE == MTPA) )
+    if( (CONTROL_STATE == MTPA) || (CONTROL_STATE == LAC_FW) )
     {
         if( (i32_wheel_speed_kmh_x10 < 20) && (ui16_motor_init_state_timeout == 0) && (pMS->u_q < 400) )
         {
@@ -315,10 +317,52 @@ static void control_loop(int32_t i32_i_d_mA, int32_t i32_i_q_mA, int32_t i32_i_q
         i32_U_angle = get_angle(i32_u_d_temp, i32_u_q_temp);
         i32_U_magnitude = get_magnitude(i32_u_d_temp, i32_u_q_temp);
 
-        if (i32_U_magnitude > _U_MAX)
+        if (i32_U_magnitude >= _U_MAX)
         {
             i32_u_q_temp = i32_u_q_temp * _U_MAX / i32_U_magnitude;
             i32_u_d_temp = i32_u_d_temp * _U_MAX / i32_U_magnitude;
+            ui8_control_state_switch_count += 1;
+            if (ui8_control_state_switch_count >= 50)
+            {
+                CONTROL_STATE = LAC_FW;
+                ui8_control_state_switch_count = 0;
+                PIangle.integral_part = (i32_U_angle << PIangle.shift) / PIangle.gain_i;
+                i32_U_magnitude = _U_MAX;
+            }
+        }
+        else
+        {
+            ui8_control_state_switch_count = 0;
+        }
+
+    }
+
+    if (CONTROL_STATE == LAC_FW)
+    {
+        PIangle.setpoint = -i32_i_q_target_mA;
+        PIangle.recent_value = -i32_i_q_mA;
+        i32_U_angle = PI_control_v2(&PIangle);
+        i32_U_magnitude = _U_MAX;
+        get_dq_coordinates(_U_MAX, i32_U_angle, &i32_u_d_temp, &i32_u_q_temp);
+        //i32_u_d_temp = 0;
+        //i32_u_q_temp = _U_MAX;
+
+        if (i32_i_d_mA > 1300)
+        {
+            ui8_control_state_switch_count += 1;
+            if (ui8_control_state_switch_count >= 50)
+            {
+                // TRANSITION TO MTPA
+                CONTROL_STATE = MTPA;
+                ui8_control_state_switch_count = 0;
+                PIid.integral_part = (i32_u_d_temp << PIid.shift) / PIid.gain_i;
+                PIiq.integral_part = (i32_u_q_temp << PIiq.shift) / PIiq.gain_i;
+            }
+        }
+        else
+        {
+            // no reset here - alow for faster return to MTPA for safety
+            //ui8_control_state_switch_count = 0;
         }
     }
 

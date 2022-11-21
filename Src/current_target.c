@@ -175,6 +175,14 @@ int32_t compute_iq_target(MotorState_t *pMS)
         ui8_recuperation = 0;
     }
 
+    // regenerative braking if not pedaling   
+    //if(pMS->PedalData.uint8_pedaling == 0)
+    //{
+    //    i8_assist_level = -3;
+    //    ui8_recuperation = 1;
+    //    ui8_motoring = 0;
+    //}
+
     // update static variables
     i32_omega_el = limit_int32(1, 50000, pMS->HallData.i32_omega_el);
     i32_pedal_torque_Nm_x10 = limit_uint32(0, 2000, pMS->PedalData.uint32_torque_Nm_x10);
@@ -513,19 +521,19 @@ static int32_t compute_iq_target_recuperation()
     switch(i8_assist_level)
     {
         case -5:
-            i32_target_power_mW = -600000;
+            i32_target_power_mW = -700000;
             break;
         case -4:
-            i32_target_power_mW = -600000;
+            i32_target_power_mW = -700000;
             break;
         case -3:
-            i32_target_power_mW = -600000;
+            i32_target_power_mW = -700000;
             break;
         case -2:
-            i32_target_power_mW = -450000;
+            i32_target_power_mW = -500000;
             break;
         case -1:
-            i32_target_power_mW = -250000;
+            i32_target_power_mW = -300000;
             break;
         case 0:
             i32_target_power_mW = 0;
@@ -621,7 +629,14 @@ static void limit_iq_target_recuperation(int32_t *p_i32_iq_target_mA)
     // no regeneration at very low velocities
     i32_iq_target_mA_temp = map(i32_wheel_speed_kmh_x10, 35, 55, 0, i32_iq_target_mA_temp);
     // no regeneration at very high velocities
-    i32_iq_target_mA_temp = map(i32_wheel_speed_kmh_x10, 400, 450, i32_iq_target_mA_temp, 0);
+    i32_iq_target_mA_temp = map(i32_wheel_speed_kmh_x10, 500, 530, i32_iq_target_mA_temp, 0);
+    
+    
+    // ---------------------------- battery current
+
+    // currently not limiting the battery current
+    // the regenerative motor power targets in compute_iq_target_recuperation are moderate
+    // the actual regenerative battery power is even lower because of the inverter and resisitive losses.
     
     
     // ---------------------------- limit phase current

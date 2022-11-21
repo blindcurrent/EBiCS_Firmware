@@ -10,7 +10,7 @@
 void init_motor_control_v2(void);
 void run_motor_control_v2(MotorState_t *pMS);
 
-void print_motor_control_info(void);
+void print_motor_control_info(MotorState_t *pMS);
 void test_motor_control_v2(void);
 
 
